@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<title>O'zbekiston avtoraqamlari</title>
+<script src="https://code.highcharts.com/maps/highmaps.js"></script>
+<style>
+  body { font-family: "Segoe UI", Arial, sans-serif; margin: 0; background: #f4f6f9; color: #222; }
+  header { background: #1e3a5f; color: #fff; padding: 14px 24px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { margin: 0; font-size: 20px; }
+  main { padding: 20px 24px; display: grid; grid-template-columns: 2fr 1fr; gap: 20px; }
+  .card { background: #fff; border-radius: 10px; padding: 16px; box-shadow: 0 1px 4px rgba(0,0,0,.08); }
+  .full { grid-column: 1 / -1; }
+  #map { height: 460px; }
+  .types div { display: flex; justify-content: space-between; padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+  .types div:hover, .types div.active { background: #e3eefc; }
+  form { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+  input, select, button { padding: 8px; border: 1px solid #ccc; border-radius: 6px; font-size: 14px; }
+  button { background: #1e3a5f; color: #fff; border: none; cursor: pointer; }
+  button.secondary { background: #7f8c8d; }
+  button.danger { background: #c0392b; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { padding: 8px; border-bottom: 1px solid #eee; text-align: left; }
+  .plate { font-family: Consolas, monospace; font-weight: bold; border: 2px solid #222; border-radius: 4px; padding: 2px 6px; }
+  #error { color: #c0392b; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚗 O'zbekiston avtoraqamlari</h1>
+  <div>Jami: <b id="total">0</b> ta</div>
+</header>
+
+<main>
+  <div class="card"><div id="map" class="highcharts-light"></div></div>
+
+  <div class="card">
+    <h2 id="regionTitle">Butun O'zbekiston</h2>
+    <p>Mashinalar soni: <b id="regionCount">0</b></p>
+    <h3>Turlar bo'yicha</h3>
+    <div class="types" id="types"></div>
+    <br>
+    <button class="secondary" id="resetBtn">Hammasini ko'rsatish</button>
+  </div>
+
+  <div class="card full">
+    <form id="carForm">
+      <input id="plate" placeholder="90 A 123 BC" required>
+      <select id="carType"></select>
+      <input id="model" placeholder="Model (masalan: Cobalt)">
+      <button type="submit" id="saveBtn">Qo'shish</button>
+      <button type="button" class="secondary" id="cancelBtn" style="display:none">Bekor qilish</button>
+      <span id="error"></span>
+    </form>
+    <form onsubmit="return false">
+      <input id="search" placeholder="Raqam bo'yicha qidirish">
+    </form>
+    <p id="listInfo"></p>
+    <table>
+      <thead><tr><th>Raqam</th><th>Viloyat</th><th>Turi</th><th>Model</th><th></th></tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</main>
+
+<script>
+const KEY_TO_REGION = {
+  "uz-tk": "Toshkent shahri",  "uz-ta": "Toshkent viloyati",
+  "uz-si": "Sirdaryo",         "uz-ji": "Jizzax",
+  "uz-sa": "Samarqand",        "uz-fa": "Farg'ona",
+  "uz-ng": "Namangan",         "uz-an": "Andijon",
+  "uz-qa": "Qashqadaryo",      "uz-su": "Surxondaryo",
+  "uz-bu": "Buxoro",           "uz-nw": "Navoiy",
+  "uz-kh": "Xorazm",           "uz-qr": "Qoraqalpog'iston",
+};
+
+let carTypes = [], stats = null, cars = [], chart = null;
+let selectedRegion = null, selectedType = "", editingId = null;
+const $ = id => document.getElementById(id);
+
+function esc(s) {
+  return String(s ?? "").replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+function formatPlate(p) {
+  return /^\d{2}[A-Z]/.test(p)
+    ? `${p.slice(0, 2)} ${p[2]} ${p.slice(3, 6)} ${p.slice(6)}`
+    : `${p.slice(0, 2)} ${p.slice(2, 5)} ${p.slice(5)}`;
+}
+
+async function api(url, options = {}) {
+  const res = await fetch(url, { headers: { "Content-Type": "application/json" }, ...options });
+  const data = await res.json();
+  if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : "Ma'lumot noto'g'ri");
+  return data;
+}
+
+function mapData() {
+  return Object.entries(KEY_TO_REGION).map(([key, name]) => ({
+    "hc-key": key,
+    value: stats.regions[name]?.total || 0,
+  }));
+}
+
+async function drawMap() {
+  const topology = await fetch("https://code.highcharts.com/mapdata/countries/uz/uz-all.topo.json")
+    .then(r => r.json());
+  chart = Highcharts.mapChart("map", {
+    chart: { map: topology },
+    title: { text: "Viloyatni bosing" },
+    credits: { enabled: false },
+    colorAxis: { min: 0, minColor: "#e3eefc", maxColor: "#1e3a5f" },
+    tooltip: {
+      headerFormat: "",
+      pointFormatter() { return `${KEY_TO_REGION[this["hc-key"]]}: <b>${this.value}</b> ta`; },
+    },
+    series: [{
+      name: "Mashinalar",
+      data: mapData(),
+      joinBy: "hc-key",
+      cursor: "pointer",
+      dataLabels: { enabled: true, format: "{point.value}" },
+      states: { hover: { color: "#f39c12" } },
+      point: { events: { click() { selectRegion(KEY_TO_REGION[this["hc-key"]]); } } },
+    }],
+  });
+}
+
+function renderPanel() {
+  const info = selectedRegion
+    ? (stats.regions[selectedRegion] || { total: 0, types: {} })
+    : { total: stats.total, types: stats.types };
+
+  $("total").textContent = stats.total;
+  $("regionTitle").textContent = selectedRegion || "Butun O'zbekiston";
+  $("regionCount").textContent = info.total;
+
+  $("types").innerHTML = carTypes.map(t => `
+    <div data-type="${esc(t)}" class="${t === selectedType ? "active" : ""}">
+      <span>${esc(t)}</span><b>${info.types[t] || 0}</b>
+    </div>`).join("");
+  $("types").querySelectorAll("div").forEach(d =>
+    d.addEventListener("click", () => selectType(d.dataset.type)));
+}
+
+function selectRegion(name) {
+  selectedRegion = name;
+  renderPanel();
+  loadCars();
+}
+
+function selectType(t) {
+  selectedType = selectedType === t ? "" : t;
+  renderPanel();
+  loadCars();
+}
+
+async function loadCars() {
+  const params = new URLSearchParams();
+  if (selectedRegion) params.set("region", selectedRegion);
+  if (selectedType) params.set("car_type", selectedType);
+  cars = await api("/api/cars?" + params);
+  renderRows();
+}
+
+function renderRows() {
+  const q = $("search").value.replace(/\s/g, "").toUpperCase();
+  const list = cars.filter(c => c.plate.includes(q));
+  $("listInfo").textContent =
+    `${list.length} ta mashina` +
+    (selectedRegion ? ` · ${selectedRegion}` : "") +
+    (selectedType ? ` · ${selectedType}` : "");
+  $("rows").innerHTML = list.map(c => `
+    <tr>
+      <td><span class="plate">${esc(formatPlate(c.plate))}</span></td>
+      <td>${esc(c.region)}</td>
+      <td>${esc(c.car_type)}</td>
+      <td>${esc(c.model)}</td>
+      <td>
+        <button onclick="startEdit(${c.id})">✏️</button>
+        <button class="danger" onclick="removeCar(${c.id})">🗑️</button>
+      </td>
+    </tr>`).join("");
+}
+
+$("carForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  $("error").textContent = "";
+  const body = JSON.stringify({
+    plate: $("plate").value,
+    car_type: $("carType").value,
+    model: $("model").value,
+  });
+  try {
+    if (editingId) await api(`/api/cars/${editingId}`, { method: "PUT", body });
+    else await api("/api/cars", { method: "POST", body });
+    resetForm();
+    await refresh();
+  } catch (err) {
+    $("error").textContent = err.message;
+  }
+});
+
+function startEdit(id) {
+  const c = cars.find(x => x.id === id);
+  editingId = id;
+  $("plate").value = formatPlate(c.plate);
+  $("carType").value = c.car_type;
+  $("model").value = c.model || "";
+  $("saveBtn").textContent = "Saqlash";
+  $("cancelBtn").style.display = "";
+  $("plate").focus();
+}
+
+function resetForm() {
+  editingId = null;
+  $("carForm").reset();
+  $("saveBtn").textContent = "Qo'shish";
+  $("cancelBtn").style.display = "none";
+  $("error").textContent = "";
+}
+
+async function removeCar(id) {
+  if (!confirm("Rostdan o'chirilsinmi?")) return;
+  await api(`/api/cars/${id}`, { method: "DELETE" });
+  await refresh();
+}
+
+async function loadStats() {
+  stats = await api("/api/stats");
+  renderPanel();
+  if (chart) chart.series[0].setData(mapData());
+}
+
+async function refresh() {
+  await Promise.all([loadStats(), loadCars()]);
+}
+
+$("cancelBtn").addEventListener("click", resetForm);
+$("resetBtn").addEventListener("click", () => { selectedType = ""; selectRegion(null); });
+$("search").addEventListener("input", renderRows);
+
+(async function init() {
+  carTypes = await api("/api/types");
+  $("carType").innerHTML = carTypes.map(t => `<option>${esc(t)}</option>`).join("");
+  await loadStats();
+  await drawMap();
+  await loadCars();
+})();
+</script>
+</body>
+</html>

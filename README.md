@@ -1,4 +1,4 @@
-\# 🚗 O'zbekiston avtoraqamlari
+# 🚗 O'zbekiston avtoraqamlari
 
 
 
@@ -6,29 +6,29 @@ Avtomobil raqami orqali uning qaysi viloyatga tegishli ekanini aniqlaydigan veb-
 
 
 
-\## Imkoniyatlar
+## Imkoniyatlar
 
-\- Raqamdan viloyatni avtomatik aniqlash (`01 A 123 BC` → Toshkent shahri)
+- Raqamdan viloyatni avtomatik aniqlash (`01 A 123 BC` → Toshkent shahri)
 
-\- Mashinalarni qo'shish, tahrirlash va o'chirish (CRUD)
+- Mashinalarni qo'shish, tahrirlash va o'chirish (CRUD)
 
-\- Asosiy ekranda O'zbekiston xaritasi: viloyat bosilganda undagi mashinalar soni chiqadi
+- Asosiy ekranda O'zbekiston xaritasi: viloyat bosilganda undagi mashinalar soni chiqadi
 
-\- Mashinalarni turi bo'yicha guruhlash (Sedan, SUV, Avtobus...)
+- Mashinalarni turi bo'yicha guruhlash (Sedan, SUV, Avtobus...)
 
-\- Bazada 1000 ta tasodifiy o'zbek avtoraqami
-
-
-
-\## Texnologiyalar
-
-\- \*\*Backend:\*\* Python, FastAPI, SQLite
-
-\- \*\*Frontend:\*\* HTML, CSS, JavaScript, Highcharts Maps
+- Bazada 1000 ta tasodifiy o'zbek avtoraqami
 
 
 
-\## Viloyat kodlari
+## Texnologiyalar
+
+- **Backend:** Python, FastAPI, SQLite
+
+- **Frontend:** HTML, CSS, JavaScript, Highcharts Maps
+
+
+
+## Viloyat kodlari
 
 | Kod | Viloyat | Kod | Viloyat |
 
@@ -50,7 +50,7 @@ Avtomobil raqami orqali uning qaysi viloyatga tegishli ekanini aniqlaydigan veb-
 
 
 
-\## Ishga tushirish
+## Ishga tushirish
 
 ```bash
 
@@ -70,7 +70,7 @@ Brauzerda oching: http://127.0.0.1:8000
 
 
 
-\## Muallif
+## Muallif
 
 Javohir Jumanazarov
 
